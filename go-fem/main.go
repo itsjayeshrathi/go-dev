@@ -1,30 +1,38 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/itsjayeshrathi/go-fem/internal/app"
+	"github.com/itsjayeshrathi/go-fem/internal/routes"
 )
 
 func main() {
+
+	var port int
+	flag.IntVar(&port, "port", 8080, "golang backend server")
+	flag.Parse()
+
 	app, err := app.NewApplication()
 
 	if err != nil {
 		panic(err)
 	}
+	defer app.DB.Close()
 
-	app.Logger.Println("we are running our app")
-
-	http.HandleFunc("/healthcheck", HealthCheck)
-	
+	r := routes.SetupRoutes(app)
 	server := &http.Server{
-		Addr:         ":8080",
+		Addr:         fmt.Sprintf(":%d", port),
+		Handler:      r,
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
+
+	app.Logger.Printf("we are running on port %d\n", port)
 
 	err = server.ListenAndServe()
 
@@ -32,8 +40,4 @@ func main() {
 		app.Logger.Fatal(err)
 	}
 
-}
-
-func HealthCheck(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Status is available\n")
 }
