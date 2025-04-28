@@ -29,7 +29,7 @@ type PostgresWorkoutStrore struct {
 	db *sql.DB
 }
 
-func NewPostgresWokroutStore(db *sql.DB) *PostgresWorkoutStrore {
+func NewPostgresWorkoutStore(db *sql.DB) *PostgresWorkoutStrore {
 	return &PostgresWorkoutStrore{db: db}
 }
 
@@ -119,7 +119,7 @@ func (pg *PostgresWorkoutStrore) UpdateWorkout(workout *Workout) error {
 		return err
 	}
 	defer tx.Rollback()
-	query := `UPDATE workouts SET title = $1, description = $2,  duration_minutes = $3, calories_bunred = $4 WHERE id = $5`
+	query := `UPDATE workouts SET title = $1, description = $2,  duration_minutes = $3, calories_burned = $4 WHERE id = $5`
 	result, err := tx.Exec(query, workout.Title, workout.Description, workout.DurationMinutes, workout.CaloriesBurned, workout.ID)
 	if err != nil {
 		return err
