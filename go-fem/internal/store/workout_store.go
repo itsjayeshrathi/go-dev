@@ -2,11 +2,11 @@ package store
 
 import (
 	"database/sql"
-	"fmt"
 )
 
 type Workout struct {
 	ID              int            `json:"id"`
+	UserId          int            `json:"user_id"`
 	Title           string         `json:"title"`
 	Description     string         `json:"description"`
 	DurationMinutes int            `json:"duration_minutes"`
@@ -38,6 +38,7 @@ type WorkoutStore interface {
 	GetWorkoutById(id int64) (*Workout, error)
 	UpdateWorkout(*Workout) error
 	DeleteWorkoutById(id int64) error
+	GetWorkoutOwner(id int64) (int, error)
 }
 
 func (pg *PostgresWorkoutStrore) CreateWorkout(workout *Workout) (*Workout, error) {
@@ -48,13 +49,12 @@ func (pg *PostgresWorkoutStrore) CreateWorkout(workout *Workout) (*Workout, erro
 	defer tx.Rollback()
 
 	// Insert into workouts table
-	query := `INSERT INTO workouts (title, description, duration_minutes, calories_burned) 
-	          VALUES ($1, $2, $3, $4) RETURNING id`
-	err = tx.QueryRow(query, workout.Title, workout.Description, workout.DurationMinutes, workout.CaloriesBurned).Scan(&workout.ID)
+	query := `INSERT INTO workouts (user_id,title, description, duration_minutes, calories_burned) 
+		          VALUES ($1, $2, $3, $4, $5) RETURNING id`
+	err = tx.QueryRow(query, workout.UserId, workout.Title, workout.Description, workout.DurationMinutes, workout.CaloriesBurned).Scan(&workout.ID)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(workout.ID, "printing id over here")
 
 	// Insert entries into workout_entries table
 	for _, entry := range workout.Entries {
@@ -162,4 +162,14 @@ func (pg *PostgresWorkoutStrore) DeleteWorkoutById(id int64) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (pg *PostgresWorkoutStrore) GetWorkoutOwner(id int64) (int, error) {
+	var UserID int
+	query := `SELECT user_id FROM workouts WHERE id = $1`
+	err := pg.db.QueryRow(query, id).Scan(&UserID)
+	if err != nil {
+		return 0, err
+	}
+	return UserID, nil
 }

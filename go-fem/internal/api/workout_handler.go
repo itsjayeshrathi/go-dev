@@ -3,11 +3,13 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/itsjayeshrathi/go-fem/internal/middleware"
 	"github.com/itsjayeshrathi/go-fem/internal/store"
 	"github.com/itsjayeshrathi/go-fem/internal/utils"
 )
@@ -33,6 +35,13 @@ func (wh *WorkOutHandler) HandleGetWokroutByID(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	currentUser := middleware.GetUser(r)
+
+	if currentUser == nil || currentUser == store.AnonymousUser {
+		utils.WriteJSON(w, http.StatusBadRequest, utils.Envelop{"error": "you must be logged in"})
+		return
+	}
+	workoutId = int64(currentUser.ID)
 	workout, err := wh.workoutStore.GetWorkoutById(workoutId)
 	if err != nil {
 		wh.logger.Printf("ERROR: getWorkoutByID: %v", err)
@@ -112,6 +121,26 @@ func (wh *WorkOutHandler) HandlWokroutUpdateByID(w http.ResponseWriter, r *http.
 	if updateWorkoutRequest.Entries != nil {
 		existingWorkout.Entries = updateWorkoutRequest.Entries
 	}
+	currentUser := middleware.GetUser(r)
+	if currentUser == nil || currentUser == store.AnonymousUser {
+		utils.WriteJSON(w, http.StatusBadRequest, utils.Envelop{"error": "you must be logged in"})
+		return
+	}
+	workoutOwner, err := wh.workoutStore.GetWorkoutOwner(workoutId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			utils.WriteJSON(w, http.StatusNotFound, utils.Envelop{"error": "you must be logged in"})
+			return
+		}
+		utils.WriteJSON(w, http.StatusInternalServerError, utils.Envelop{"error": "workout does not exist"})
+		return
+	}
+
+	if workoutOwner != currentUser.ID {
+		utils.WriteJSON(w, http.StatusForbidden, utils.Envelop{"error": "you are not authorized to update this workout"})
+		return
+	}
+
 	err = wh.workoutStore.UpdateWorkout(existingWorkout)
 	if err != nil {
 		wh.logger.Printf("ERROR: updatingWork: %v", err)
@@ -134,6 +163,27 @@ func (wh *WorkOutHandler) HandleWorkoutDeleteById(w http.ResponseWriter, r *http
 		http.NotFound(w, r)
 		return
 	}
+	currentUser := middleware.GetUser(r)
+	if currentUser == nil || currentUser == store.AnonymousUser {
+		utils.WriteJSON(w, http.StatusBadRequest, utils.Envelop{"error": "you must be logged in"})
+		return
+	}
+	workoutOwner, err := wh.workoutStore.GetWorkoutOwner(workoutId)
+
+	if workoutOwner != currentUser.ID {
+		utils.WriteJSON(w, http.StatusForbidden, utils.Envelop{"error": "you are not authorized to update this workout"})
+		return
+	}
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			utils.WriteJSON(w, http.StatusNotFound, utils.Envelop{"error": "you must be logged in"})
+			return
+		}
+		utils.WriteJSON(w, http.StatusInternalServerError, utils.Envelop{"error": "workout does not exist"})
+		return
+	}
+
 	err = wh.workoutStore.DeleteWorkoutById(workoutId)
 	if err == sql.ErrNoRows {
 		http.Error(w, "workout not found", http.StatusNotFound)
